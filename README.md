@@ -23,7 +23,7 @@ This repository contains configuration files and playbooks for automating tasks 
 
 3. **Run a playbook:**
     ```bash
-    ansible-playbook playbook.yml
+    ansible-playbook -i inventory.ini playbooks/setup_server.yml -u username -ask-become-pass
     ```
 
 ## Contributing
