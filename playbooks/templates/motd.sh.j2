@@ -1,0 +1,53 @@
+#!/bin/bash
+# Dynamic MOTD generated via Ansible
+
+echo "============================================================"
+echo "Welcome $USER!"
+echo "Host: $(hostname)"
+echo "IP: $(hostname -I | awk '{print $1}')"
+echo "OS: $(. /etc/os-release && echo \"$NAME $VERSION\")"
+echo "Kernel: $(uname -r)"
+echo "Uptime: $(uptime -p)"
+echo "Shell: $SHELL"
+
+# Packages
+PACKAGES=""
+{% if ansible_os_family == 'Debian' %}
+PKG_APT=$(dpkg-query -f . -W 2>/dev/null | wc -c)
+PACKAGES="$PKG_APT (apt)"
+{% elif ansible_os_family == 'Archlinux' %}
+PKG_PACMAN=$(pacman -Qq 2>/dev/null | wc -l)
+PKG_FLATPAK=$(flatpak list 2>/dev/null | wc -l)
+PKG_SNAP=$(snap list 2>/dev/null | wc -l)
+PACKAGES="$PKG_PACMAN (pacman), $PKG_FLATPAK (flatpak), $PKG_SNAP (snap)"
+{% elif ansible_os_family == 'RedHat' %}
+PKG_YUM=$(yum list installed 2>/dev/null | wc -l)
+PKG_FLATPAK=$(flatpak list 2>/dev/null | wc -l || echo 0)
+PKG_SNAP=$(snap list 2>/dev/null | wc -l || echo 0)
+PACKAGES="$PKG_YUM (yum/dnf), $PKG_FLATPAK (flatpak), $PKG_SNAP (snap)"
+{% else %}
+PACKAGES="N/A"
+{% endif %}
+echo "Packages: $PACKAGES"
+
+# CPU
+CPU=$(lscpu | grep 'Model name' | awk -F: '{print $2}' | xargs)
+echo "CPU: $CPU"
+
+# GPU (if exists)
+if [ -d /sys/class/drm/card0/device ]; then
+    GPU=$(lspci | grep -i 'vga\|3d\|2d')
+else
+    GPU="N/A"
+fi
+echo "GPU: $GPU"
+
+# Memory
+MEM=$(free -h | awk '/Mem:/ {print $2}')
+echo "Memory: $MEM"
+
+# Disk (root)
+DISK=$(df -h / | awk 'NR==2 {print $2 " total, " $3 " used, " $4 " free"}')
+echo "Disk: $DISK"
+
+echo "============================================================"

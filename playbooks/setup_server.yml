@@ -1,0 +1,122 @@
+---
+- name: setup suoders and ssh keypair
+  hosts: myvms
+  gather_facts: yes
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  tasks:
+
+    - debug:
+        msg: "Ich bin eingeloggt als {{ ansible_user }}"
+
+    - name: Ensure SSH service is running and enabled
+      service:
+        name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
+        state: started
+        enabled: yes
+
+    - name: Install sudo package (Debian/Ubuntu)
+      become: yes
+      become_method: su
+      become_user: root
+      apt:
+        name: sudo
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install sudo package (RedHat/Fedora)
+      become: yes
+      become_method: su
+      become_user: root
+      yum:
+        name: sudo
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Add current user to sudoers
+      become: yes
+      become_method: su
+      become_user: root
+      ansible.builtin.lineinfile:
+        path: "/etc/sudoers.d/{{ ansible_user }}"
+        line: "{{ ansible_user }} ALL=(ALL) ALL"
+        create: yes
+        owner: root
+        group: root
+        mode: '0440'
+
+    - name: Install firewall package
+      become: yes
+      block:
+        - name: Install firewalld on RedHat/CentOS/Fedora
+          yum:
+            name: firewalld
+            state: present
+          when: ansible_os_family == "RedHat"
+
+        - name: Install ufw on Debian/Ubuntu
+          apt:
+            name: ufw
+            state: present
+          when: ansible_os_family == "Debian"
+
+    - name: Copy custom sshd_config
+      become: yes
+      copy:
+        src: /home/kimox/Projekte/first-ansible/files/sshd_config
+        dest: /etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: 644
+        backup: yes
+        force: yes
+
+    - name: Generate host-specific SSH keypair
+      delegate_to: localhost
+      community.crypto.openssh_keypair:
+        path: "{{ lookup('env','HOME') }}/.ssh/ansible_{{ inventory_hostname }}"
+        type: rsa
+        size: 4096
+        comment: "ansible@{{ inventory_hostname }}"
+        state: present
+
+    - name: Add host-specific public key to remote user
+      ansible.builtin.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/ansible_' + inventory_hostname + '.pub') }}"
+
+    - name: Enable SSH port in firewall
+      become: yes
+      block:
+        - name: Enable SSH on firewalld (RedHat)
+          ansible.posix.firewalld:
+            port: 22/tcp
+            permanent: true
+            state: enabled
+            immediate: true
+          when: ansible_os_family == "RedHat"
+
+        - name: Allow SSH on UFW (Debian)
+          ansible.builtin.ufw:
+            rule: allow
+            name: OpenSSH
+            state: enabled
+          when: ansible_os_family == "Debian"
+
+    - name: Deploy dynamic MOTD script
+      template:
+        src: motd.sh.j2
+        dest: /etc/profile.d/motd.sh
+        owner: root
+        group: root
+        mode: '0755'
+      become: yes
+
+    - name: Reboot the host
+      become: yes
+      ansible.builtin.reboot:
+        reboot_timeout: 60
+        test_command: whoami
+      vars:
+        ansible_ssh_private_key_file: "{{ lookup('env','HOME') + '/.ssh/ansible_' + inventory_hostname }}"
