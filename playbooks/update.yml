@@ -1,0 +1,37 @@
+- name: Notify, update, and reboot systems
+  hosts: all
+  become: yes
+  vars:
+    log_dir: ../logs
+  tasks:
+
+    - name: Update packages (Debian/Ubuntu)
+      apt:
+        upgrade: dist
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Update packages (RedHat/Fedora)
+      yum:
+        name: '*'
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Copy APT history log to playbook logs
+      fetch:
+        src: /var/log/apt/history.log
+        dest: "{{ log_dir }}/packages-updates.log"
+        flat: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Copy YUM/DNF log to playbook logs
+      fetch:
+        src: /var/log/yum.log
+        dest: "{{ log_dir }/packages-updates.log"
+        flat: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Reboot system
+      reboot:
+        reboot_timeout: 60
+        test_command: whoami

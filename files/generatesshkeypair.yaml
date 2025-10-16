@@ -1,0 +1,14 @@
+    - name: Generate host-specific SSH keypair
+      delegate_to: localhost
+      community.crypto.openssh_keypair:
+        path: "{{ lookup('env','HOME') }}/.ssh/ansible_{{ inventory_hostname }}"
+        type: rsa
+        size: 4096
+        comment: "ansible@{{ inventory_hostname }}"
+        state: present
+
+    - name: Add host-specific public key to remote user
+      ansible.builtin.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/ansible_' + inventory_hostname + '.pub') }}"

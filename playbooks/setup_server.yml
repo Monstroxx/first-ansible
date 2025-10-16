@@ -71,38 +71,34 @@
         backup: yes
         force: yes
 
-    - name: Generate host-specific SSH keypair
-      delegate_to: localhost
-      community.crypto.openssh_keypair:
-        path: "{{ lookup('env','HOME') }}/.ssh/ansible_{{ inventory_hostname }}"
-        type: rsa
-        size: 4096
-        comment: "ansible@{{ inventory_hostname }}"
-        state: present
-
     - name: Add host-specific public key to remote user
       ansible.builtin.authorized_key:
         user: "{{ ansible_user }}"
         state: present
-        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/ansible_' + inventory_hostname + '.pub') }}"
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
 
     - name: Enable SSH port in firewall
       become: yes
       block:
-        - name: Enable SSH on firewalld (RedHat)
+
+        - name: Enable firewall ports on RedHat (firewalld)
           ansible.posix.firewalld:
-            port: 22/tcp
+            port: "{{ item }}"
             permanent: true
             state: enabled
             immediate: true
+          loop: "{{ firewall_ports.split(',') }}"
           when: ansible_os_family == "RedHat"
 
-        - name: Allow SSH on UFW (Debian)
-          ansible.builtin.ufw:
-            rule: allow
-            name: OpenSSH
-            state: enabled
-          when: ansible_os_family == "Debian"
+        - name: Enable UFW firewall and allow ports on Debian/Ubuntu
+          block:
+            - name: Allow ports
+              ansible.builtin.ufw:
+                rule: allow
+                port: "{{ item.split('/')[0] }}"
+                proto: "{{ item.split('/')[1] }}"
+                state: enabled
+              loop: "{{ firewall_ports.split(',') }}"
 
     - name: Deploy dynamic MOTD script
       template:
@@ -119,4 +115,4 @@
         reboot_timeout: 60
         test_command: whoami
       vars:
-        ansible_ssh_private_key_file: "{{ lookup('env','HOME') + '/.ssh/ansible_' + inventory_hostname }}"
+        ansible_ssh_private_key_file: "{{ lookup('env','HOME') + '/.ssh/id_rsa' }}"
