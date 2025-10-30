@@ -1,0 +1,35 @@
+<?php
+
+$mysql_host = '127.0.0.1';
+$port = {{ mysql_port }};
+$dbname   = '{{ mysql_database }}';
+$mysql_user = '{{ mysql_user }}';
+$mysql_password = '{{ mysql_password }}';
+
+
+// Verbindung herstellen
+$conn = mysqli_connect($mysql_host, $mysql_user, $mysql_password, $dbname, $port);
+
+if (!$conn) {
+    die('Konnte nicht mit MySQL verbinden: ' . mysqli_connect_error());
+}
+
+// Tabellen abfragen
+$sql = "SHOW TABLES FROM `$dbname`";
+$result = mysqli_query($conn, $sql);
+
+if (!$result) {
+    die('DB-Fehler, Tabellen konnten nicht aufgelistet werden: ' . mysqli_error($conn));
+}
+
+// Tabellen ausgeben
+echo "<h2>Tabellen in Datenbank $dbname:</h2>";
+echo "<ul>";
+while ($row = mysqli_fetch_row($result)) {
+    echo "<li>{$row[0]}</li>";
+}
+echo "</ul>";
+
+mysqli_free_result($result);
+mysqli_close($conn);
+?>
